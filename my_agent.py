@@ -169,7 +169,7 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
             
             market_segment_obj = MSegment(campaign.target_segment.name)
             # active_campaign_market_segments.add(market_segment_obj)
-            for k, v in market_segment_obj.get_map().values():
+            for k, v in market_segment_obj.get_map().items():
                 total_indicators[k] += v
 
         # find partial overlap
@@ -182,8 +182,8 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
             for indicator in total_indicators:
                 if total_indicators[indicator] and market_segment_map[indicator]:
-                    campaign_overlap_map[campaign] = 1
-
+                    campaign_overlap_map[campaign.target_segment.name.upper()] = 1
+    
         
         # find total overlap
 
@@ -201,18 +201,19 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
                 is_overlap = is_gender_overlap and is_income_overlap and is_age_overlap
 
-                if is_overlap: campaign_overlap_map[auction_campaign] = 2
+                if is_overlap: campaign_overlap_map[campaign.target_segment.name.upper()] = 2
 
         res_dict = {}
 
         for campaign in campaigns_for_auction:
-            if campaign_overlap_map[campaign] == 1: # partial
+            if campaign_overlap_map[campaign.target_segment.name.upper()] == 1: # partial
                 res_dict[campaign] = campaign.reach * 0.99
             
-            if campaign_overlap_map[campaign] == 0: # no overlap
+            if campaign_overlap_map[campaign.target_segment.name.upper()] == 0: # no overlap
                 res_dict[campaign] = campaign.reach * 0.9
 
         return res_dict
+
 
 if __name__ == "__main__":
     # Here's an opportunity to test offline against some TA agents. Just run this file to do so.
