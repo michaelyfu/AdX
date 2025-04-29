@@ -123,18 +123,36 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
         for campaign in active_campaigns:
 
-    #         uid: int
-    # bidder: any
-    # auction_item_spec: MarketSegment
-    # bid_per_item: float
-    # bid_limit: float # same units as bid_per_item (e.g. dollars)
+            reach_proportion = campaign.reach / (self.market_segment_map[campaign.target_segment.name.upper()] ) 
 
-            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = 0.9, bid_limit = 0.9 * campaign.reach)
+            item_bid = 0.9
+
+            if reach_proportion < 0.4:
+                item_bid = 0.88001
+            elif reach_proportion < 0.6:
+                item_bid = 0.90001
+            else:
+                item_bid = 0.92001
+            
+            if campaign.reach < 800:
+                item_bid += 0.02
+            elif campaign.reach < 2000:
+                item_bid += 0.01
+            
+            if campaign.start_day < 4:
+                item_bid += 0.02
+            elif campaign.start_day < 7:
+                item_bid += 0.01
+
+            print(item_bid)
+
+
+            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = 0.9, bid_limit = campaign.reach)
 
             bid_set = set()
             bid_set.add(bid)
 
-            bundle = BidBundle(campaign_id = campaign.uid, limit = 0.9 * campaign.reach, bid_entries = bid_set)
+            bundle = BidBundle(campaign_id = campaign.uid, limit = campaign.reach, bid_entries = bid_set)
 
             bundles.add(bundle)
 
@@ -148,8 +166,6 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         # 2 if actual overlap (male old, male old high income)
 
         active_campaigns = self.get_active_campaigns()
-
-        # active_campaign_market_segments = set()
 
         total_indicators = {
             "male": 0,
