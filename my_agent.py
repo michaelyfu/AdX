@@ -241,3 +241,5 @@ if __name__ == "__main__":
     # Don't change this. Adapt initialization to your environment
     simulator = AdXGameSimulator()
     simulator.run_simulation(agents=test_agents, num_simulations=500)
+
+agent_submission = MyNDaysNCampaignsAgent()
