@@ -126,6 +126,7 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
             reach_proportion = campaign.reach / (self.market_segment_map[campaign.target_segment.name.upper()] ) 
 
             item_bid = 0.9
+            budget = campaign.reach
 
             if reach_proportion < 0.4:
                 item_bid = 0.88001
@@ -135,24 +136,26 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
                 item_bid = 0.92001
             
             if campaign.reach < 800:
-                item_bid += 0.02
+                budget *= 1.1
             elif campaign.reach < 2000:
-                item_bid += 0.01
+                budget *= 1.05
             
             if campaign.start_day < 4:
                 item_bid += 0.02
+                budget *= 1.05
             elif campaign.start_day < 7:
                 item_bid += 0.01
+                budget *= 1.03
 
-            print(item_bid)
+            # print(item_bid)
 
 
-            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = 0.9, bid_limit = campaign.reach)
+            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = 0.9, bid_limit = budget)
 
             bid_set = set()
             bid_set.add(bid)
 
-            bundle = BidBundle(campaign_id = campaign.uid, limit = campaign.reach, bid_entries = bid_set)
+            bundle = BidBundle(campaign_id = campaign.uid, limit = budget, bid_entries = bid_set)
 
             bundles.add(bundle)
 
