@@ -242,4 +242,4 @@ if __name__ == "__main__":
     simulator = AdXGameSimulator()
     simulator.run_simulation(agents=test_agents, num_simulations=500)
 
-agent_submission = MyNDaysNCampaignsAgent()
+my_agent_submission = MyNDaysNCampaignsAgent()
