@@ -242,4 +242,3 @@ if __name__ == "__main__":
     simulator = AdXGameSimulator()
     simulator.run_simulation(agents=test_agents, num_simulations=100)
 
-my_agent_submission = JohnAgent()
