@@ -9,24 +9,24 @@ from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaignsAgent
 from agt_server.agents.base_agents.adx_agent import NDaysNCampaignsAgent
 
-def run_greed_experiment(greed_values, num_simulations=50):
+def run_experiment(beta_values, num_simulations=50):
     """
-    Run simulations with different greed values and return the average profits.
+    Run simulations with different values and return the average profits.
     
     Args:
-        greed_values: List of greed values to test
-        num_simulations: Number of simulations to run for each greed value
+        values: List of values to test
+        num_simulations: Number of simulations to run for each value
     
     Returns:
-        List of average profits for each greed value
+        List of average profits for each value
     """
     results = []
     
-    for greed in greed_values:
-        print(f"Testing greed factor: {greed:.2f}")
+    for beta in beta_values:
+        print(f"Testing beta factor: {beta:.2f}")
         
-        # Create our agent with the current greed value
-        eisenberg_agent = EisenbergAgent(name=f"Eisenberg-{greed:.2f}", greed_factor=greed)
+        # Create our agent with the current value
+        eisenberg_agent = EisenbergAgent(name=f"Eisenberg-{beta:.2f}", beta=beta)
         
         # Create baseline agents
         baseline_agents = [Tier1NDaysNCampaignsAgent(name=f"Tier1-{i}") for i in range(9)]
@@ -51,49 +51,50 @@ def run_greed_experiment(greed_values, num_simulations=50):
     
     return results
 
-def plot_results(greed_values, profits):
-    """Plot the results of the greed experiment."""
+def plot_results(values, profits):
+    """Plot the results of the experiment."""
     plt.figure(figsize=(10, 6))
-    plt.plot(greed_values, profits, 'o-', linewidth=2)
-    plt.xlabel('Greed Factor')
+    plt.plot(values, profits, 'o-', linewidth=2)
+    plt.xlabel('Beta Value')
     plt.ylabel('Average Profit')
-    plt.title('EisenbergAgent Performance vs Greed Factor')
+    plt.title('EisenbergAgent Performance vs Beta Value')
     plt.grid(True)
     
-    # Find and mark the optimal greed value
+    # Find and mark the optimal beta value
     optimal_idx = np.argmax(profits)
-    optimal_greed = greed_values[optimal_idx]
+    optimal_beta = beta_values[optimal_idx]
     optimal_profit = profits[optimal_idx]
     
-    plt.scatter([optimal_greed], [optimal_profit], color='red', s=100, zorder=5)
-    plt.annotate(f'Optimal: {optimal_greed:.2f}\nProfit: {optimal_profit:.2f}',
-                 xy=(optimal_greed, optimal_profit),
+    plt.scatter([optimal_beta], [optimal_profit], color='red', s=100, zorder=5)
+    plt.annotate(f'Optimal: {optimal_beta:.2f}\nProfit: {optimal_profit:.2f}',
+                 xy=(optimal_beta, optimal_profit),
                  xytext=(10, -30),
                  textcoords='offset points',
                  arrowprops=dict(arrowstyle='->'))
     
-    plt.savefig('greed_experiment_results.png')
+    plt.savefig('beta_experiment_results.png')
     plt.show()
 
 if __name__ == "__main__":
-    # Define the range of greed values to test
-    greed_values = np.linspace(1.0, 2.0, 21)  # Test from 1.0 to 2.0 in steps of 0.05 #21 
+    # Define the range of values to test
+    beta_values = np.linspace(0.3, 1.0, 8)  # Test from 0.3 to 1.0 in steps of 0.1
     
     # Run multiple experiments and average results
     num_experiments = 5
     all_profits = []
     
-    for _ in range(num_experiments):
-        profits = run_greed_experiment(greed_values)
+    for i in range(num_experiments):
+        print('experiment num:', i + 1)
+        profits = run_experiment(beta_values)
         all_profits.append(profits)
     
     # Average the profits across experiments
     avg_profits = np.mean(all_profits, axis=0)
     
     # Plot the averaged results
-    plot_results(greed_values, avg_profits)
+    plot_results(beta_values, avg_profits)
     
-    # Print the optimal greed value based on averaged results
+    # Print the optimal value based on averaged results
     optimal_idx = np.argmax(avg_profits)
-    print(f"\nOptimal greed factor: {greed_values[optimal_idx]:.2f}")
+    print(f"\nOptimal beta value: {beta_values[optimal_idx]:.2f}")
     print(f"Optimal average profit: {avg_profits[optimal_idx]:.2f}")

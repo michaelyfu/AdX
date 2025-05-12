@@ -64,9 +64,10 @@ class MSegment:
 
 class EisenbergAgent(NDaysNCampaignsAgent):
 
-    def __init__(self, name: str = "EisenbergAgent"):
+    def __init__(self, name: str = "EisenbergAgent", beta=0.4):
         super().__init__()
         self.name = name
+        self.beta = beta
 
         # Average number of *daily* users in each primitive segment (hand‑out table).
         self.market_segment_map: Dict[str, int] = {
@@ -105,8 +106,6 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             "FEMALE_OLD_HIGHINCOME":    407,
         }
 
-        self._prev_day_seg_price = {}
-
     # ───────────────── EG solver ──────────────────────────
     def _solve_eg_market(self, campaigns):
         if not campaigns:
@@ -131,9 +130,6 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
         p = constraints[0].dual_value
         prices = {s: float(max(v, 0)) for s, v in zip(segments, p)}
-        
-        for seg, price in prices.items():
-            self._prev_day_seg_price[seg] = price
         
         return prices, X.value, seg_to_idx
 
@@ -184,62 +180,55 @@ class EisenbergAgent(NDaysNCampaignsAgent):
         return total
     
     def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
+            
+            campaign_bids = {}
+            current_day = self.get_current_day()
+            quality_score = self.get_quality_score()
 
-        # ----------------------------------------------------------------
-        
-        campaign_bids = {}
-        current_day = self.get_current_day()
-        quality_score = self.get_quality_score()
+            # Step 1: Build the set of segments we're already targeting
+            active_campaigns = self.get_active_campaigns()
+            committed_segments = set()
+            for camp in active_campaigns:
+                committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
 
-        # Step 1: Build the set of segments we're already targeting
-        active_campaigns = self.get_active_campaigns()
-        if active_campaigns:
-            avg_cpv = float(np.mean([c.budget / c.reach for c in active_campaigns]))
-        else:
-            avg_cpv = 1.0
+            # Step 2: Decide bids
+            for campaign in campaigns_for_auction:
+                R = campaign.reach
+                start_day, end_day = campaign.start_day, campaign.end_day
+                duration = end_day - start_day + 1
 
-        committed_segments = set()
-        for camp in active_campaigns:
-            committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
+                # Step 3: Skip campaigns with overlap
+                overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
+                            for seg in committed_segments)
+                if overlap:
+                    continue  # too much overlap with currently active segments
 
-        # Step 2: Decide bids
-        for campaign in campaigns_for_auction:
-            R = campaign.reach
-            start_day, end_day = campaign.start_day, campaign.end_day
-            duration = end_day - start_day + 1
+                # Step 4: Estimate user supply and value
+                # **normalize**: get per‑day users, then total expected over the campaign window
+                daily_users    = self.estimate_segment_size(campaign.target_segment)
+                expected_users = daily_users * duration
+                expected_value = min(R, expected_users)
 
-            # Step 3: Skip campaigns with overlap
-            overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
-                        for seg in committed_segments)
-            if overlap:
-                continue  # too much overlap with currently active segments
+                is_short = (duration <= 2)
+                base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
+                raw_bid  = base_bid \
+                        * (0.9 if current_day >= start_day else 1.0) \
+                        * (0.9 if is_short else 1.0)
 
-            # Step 4: Estimate user supply and value
-            # **normalize**: get per‑day users, then total expected over the campaign window
-            daily_users    = self.estimate_segment_size(campaign.target_segment)
-            expected_users = daily_users * duration
-            expected_value = min(R, expected_users)
+                # 5) DYNAMIC PACING BOOST
+                # remaining_reach = R (we haven't won any for this new campaign yet)
+                
+                remaining_days = max(1, duration - (current_day - start_day + 1))
+                pace = min(1.0, R / (remaining_days * max(1, daily_users)))
+                pacing_mult = 1.0 + self.beta * (1.0 - pace)
+                raw_bid *= pacing_mult
 
-            # Step 5: Determine bid based on quality and urgency
-            is_short = duration <= 2
-            base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
-            # --- B) dual-price shading
-            seg = campaign.target_segment.name.upper()
-            # yesterday’s price for this segment (initialize in __init__ to 1.0)
-            p_seg = self._prev_day_seg_price.get(seg, 1.0)
+                # 6) clip & validate
+                clipped = self.clip_campaign_bid(campaign, raw_bid)
+                if self.is_valid_campaign_bid(campaign, clipped):
+                    campaign_bids[campaign] = clipped
 
-            # use avg_cpv as your “marginal_value”
-            mv      = avg_cpv
-            gap     = max(mv - p_seg, 0.0)
-            raw_bid *= 1.0 + 0.75 * (gap / mv)
-
-            # clip & validate
-            clipped = self.clip_campaign_bid(campaign, raw_bid)
-            if self.is_valid_campaign_bid(campaign, clipped):
-                campaign_bids[campaign] = clipped
-
-        return campaign_bids
+            return campaign_bids
 
     # optional: clear per‑game state
     def on_new_game(self):
