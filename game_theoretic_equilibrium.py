@@ -246,7 +246,7 @@ class AuctionSimulation:
 
         return best_bid
 
-prev_output = [0.8 + 0.2 * random.random() for _ in range(50)]
+prev_output = [0.4 + 0.7 * random.random() for _ in range(50)]
 
 simulation = AuctionSimulation()
 

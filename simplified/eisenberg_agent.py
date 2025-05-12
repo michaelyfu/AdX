@@ -2,6 +2,7 @@
 import cvxpy as cp
 import numpy as np
 from typing import Set, Dict
+import copy
 
 from agt_server.agents.base_agents.adx_agent import NDaysNCampaignsAgent
 from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaignsAgent
@@ -94,18 +95,20 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
 
         # Only the 8 atomic segments — per‑day counts from the spec
-        self.atomic_segment_map: Dict[str, int] = {
-            "MALE_YOUNG_LOWINCOME":   1836,
-            "MALE_YOUNG_HIGHINCOME":   517,
-            "FEMALE_YOUNG_LOWINCOME":  1980,
-            "FEMALE_YOUNG_HIGHINCOME":  256,
-            "MALE_OLD_LOWINCOME":      1795,
-            "MALE_OLD_HIGHINCOME":      808,
-            "FEMALE_OLD_LOWINCOME":    2401,
-            "FEMALE_OLD_HIGHINCOME":    407,
+        self.atomic_segment_map: Dict[MarketSegment, int] = {
+            MarketSegment(("Male", "Young", "LowIncome")): 1836,
+            MarketSegment(("Male", "Young", "HighIncome")): 517,
+            MarketSegment(("Male", "Old", "LowIncome")): 1795,
+            MarketSegment(("Male", "Old", "HighIncome")): 808,
+            MarketSegment(("Female", "Young", "LowIncome")): 1980,
+            MarketSegment(("Female", "Young", "HighIncome")): 256,
+            MarketSegment(("Female", "Old", "LowIncome")): 2401,
+            MarketSegment(("Female", "Old", "HighIncome")): 407
         }
 
         self.my_quality_score = self.get_quality_score()
+        self.competition_index = 1.0
+        self.prev_campaigns_for_auction = set()
         # self.GREED = 1.1
 
     # ───────────────── EG solver ──────────────────────────
@@ -174,9 +177,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
         """
         total = 0
         for seg_str, count in self.atomic_segment_map.items():
-            atomic_attrs = set(seg_str.split("_"))  # e.g. {"FEMALE","OLD","LOWINCOME"}
-            # if every attr in target_segment is in this atomic_attrs
-            if set(target_segment).issubset(atomic_attrs):
+            if target_segment.issubset(seg_str):
                 total += count
         return total
 
@@ -194,13 +195,23 @@ class EisenbergAgent(NDaysNCampaignsAgent):
         #     self.GREED *= 1.07
         # elif self.get_quality_score() > self.my_quality_score:
         #     self.GREED * 0.95
+
+
+        active_campaigns = self.get_active_campaigns()
+
+        for campaign in self.prev_campaigns_for_auction:
+            if campaign in active_campaigns:
+                self.competition_index *= 1.1
+            else:
+                self.competition_index /= 1.05
+        self.prev_campaigns_for_auction = active_campaigns
+        print(self.competition_index)
             
         campaign_bids = {}
         current_day = self.get_current_day()
         quality_score = self.get_quality_score()
-
         # Step 1: Build the set of segments we're already targeting
-        active_campaigns = self.get_active_campaigns()
+        
         committed_segments = set()
         for camp in active_campaigns:
             committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
@@ -210,10 +221,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             R = campaign.reach
             start_day, end_day = campaign.start_day, campaign.end_day
             duration = end_day - start_day + 1
-
-            print(self.estimate_segment_size(campaign.target_segment))
-            # reach_factor = campaign.reach / (self.estimate_segment_size(campaign.target_segment) * duration)
-            # print(reach_factor)
+            reach_factor = campaign.reach / self.estimate_segment_size(campaign.target_segment) # 0.3, 0.5, 0.7
 
             # Step 3: Skip campaigns with overlap
             overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
@@ -227,10 +235,19 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             expected_users = daily_users * duration
             expected_value = min(R, expected_users)
 
+            campaign_copy = copy.copy(campaign)
+            campaign_copy.budget = campaign_copy.reach * quality_score * 0.5
+
+            prices, _, _ = self._solve_eg_market(list(active_campaigns.union(set([campaign_copy]))))
+            price_index = prices[campaign.target_segment.name.upper()]
+
+            competition_index = self.competition_index
+
+
             # Step 5: Determine bid based on quality and urgency
-            is_short = duration <= 2
-            base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
+            # is_short = duration <= 2
+            base_bid = 0.7 * R if quality_score < 0.9 else 0.9 * R
+            raw_bid = base_bid * (0.7 if reach_factor < 0.4 else 1.0) * (0.8 if expected_users < 1000 else 1.0) * price_index * competition_index
             clipped_bid = self.clip_campaign_bid(campaign, raw_bid) 
 
             if self.is_valid_campaign_bid(campaign, clipped_bid):
@@ -240,7 +257,9 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
     # optional: clear per‑game state
     def on_new_game(self):
-        pass
+
+        self.competition_index = 1.0
+        self.prev_campaigns_for_auction = set()
 
 # ─────────────────── quick offline test harness ─────────────────────────
 if __name__ == "__main__":
