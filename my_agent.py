@@ -137,7 +137,7 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
             #     best_bids.append(simulation.simulate())
             # avg_best_bid = sum(best_bids) / len(best_bids)
             
-            avg_best_bid = 0.983
+            avg_best_bid = 0.3
             
             bid:Bid = Bid(bidder = self, auction_item = MARKET_SEGMENT, bid_per_item = avg_best_bid, bid_limit = campaign.reach * 1.2)
 
@@ -215,10 +215,10 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
         for campaign in campaigns_for_auction:
             if campaign_overlap_map[campaign.target_segment.name.upper()] == 1: # partial
-                res_dict[campaign] = self.clip_campaign_bid(campaign, campaign.reach * 0.9 * self.env_index)
+                res_dict[campaign] = self.clip_campaign_bid(campaign, campaign.reach * 0.6 * self.env_index)
             
             if campaign_overlap_map[campaign.target_segment.name.upper()] == 0: # no overlap
-                res_dict[campaign] = self.clip_campaign_bid(campaign, campaign.reach * 0.75 * self.env_index)
+                res_dict[campaign] = self.clip_campaign_bid(campaign, campaign.reach * 0.24 * self.env_index)
 
         return res_dict
 
