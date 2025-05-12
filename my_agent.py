@@ -62,7 +62,7 @@ class MSegment:
             "old":         self.is_old,
         }
 
-class EisenbergAgent(NDaysNCampaignsAgent):
+class MyAgent(NDaysNCampaignsAgent):
 
     def __init__(self, name: str = "B99"):
         super().__init__()
@@ -230,5 +230,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
 # ─────────────────── quick offline test harness ─────────────────────────
 if __name__ == "__main__":
-    bots = [EisenbergAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
+    bots = [MyAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
     AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
+
+my_agent_submission = MyAgent()
