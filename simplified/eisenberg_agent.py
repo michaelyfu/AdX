@@ -92,6 +92,19 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             "MALE_HIGHINCOME":         1325,
         }
 
+
+        # Only the 8 atomic segments — per‑day counts from the spec
+        self.atomic_segment_map: Dict[str, int] = {
+            "MALE_YOUNG_LOWINCOME":   1836,
+            "MALE_YOUNG_HIGHINCOME":   517,
+            "FEMALE_YOUNG_LOWINCOME":  1980,
+            "FEMALE_YOUNG_HIGHINCOME":  256,
+            "MALE_OLD_LOWINCOME":      1795,
+            "MALE_OLD_HIGHINCOME":      808,
+            "FEMALE_OLD_LOWINCOME":    2401,
+            "FEMALE_OLD_HIGHINCOME":    407,
+        }
+
     # ───────────────── EG solver ──────────────────────────
     def _solve_eg_market(self, campaigns):
         if not campaigns:
@@ -132,17 +145,69 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
             bid = Bid(self, camp.target_segment, p_m, spend)
             bundles.add(BidBundle(camp.uid, spend, {bid}))
-
         return bundles
 
-    # ─────────────────  unchanged heuristic for campaign auctions  ────
-    def get_campaign_bids(self, auctions: Set[Campaign]) -> Dict[Campaign, float]:
-        # your original overlap heuristic is kept here for brevity
-        # (or drop in your own EG‑based bidding rule later)
-        bids = {}
-        for c in auctions:
-            bids[c] = max(0.1 * c.reach, 0.9 * c.reach)  # very simple placeholder
-        return bids
+    def estimate_segment_size(self, target_segment: MarketSegment) -> int:
+        """
+        Return the *daily* number of users matching target_segment,
+        by summing over all atomic (3‑attribute) segments whose attributes
+        contain target_segment (i.e. atomic ⊇ target).
+        """
+        total = 0
+        for seg_str, count in self.atomic_segment_map.items():
+            atomic_attrs = set(seg_str.split("_"))  # e.g. {"FEMALE","OLD","LOWINCOME"}
+            # if every attr in target_segment is in this atomic_attrs
+            if set(target_segment).issubset(atomic_attrs):
+                total += count
+        return total
+
+    # def get_campaign_bids(self, auctions: Set[Campaign]) -> Dict[Campaign, float]:
+    #     # your original overlap heuristic is kept here for brevity
+    #     # (or drop in your own EG‑based bidding rule later)
+    #     bids = {}
+    #     for c in auctions:
+    #         bids[c] = max(0.1 * c.reach, 0.9 * c.reach)  # very simple placeholder
+    #     return bids
+
+    def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
+        campaign_bids = {}
+        current_day = self.get_current_day()
+        quality_score = self.get_quality_score()
+
+        # Step 1: Build the set of segments we're already targeting
+        active_campaigns = self.get_active_campaigns()
+        committed_segments = set()
+        for camp in active_campaigns:
+            committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
+
+        # Step 2: Decide bids
+        for campaign in campaigns_for_auction:
+            R = campaign.reach
+            start_day, end_day = campaign.start_day, campaign.end_day
+            duration = end_day - start_day + 1
+
+            # Step 3: Skip campaigns with significant overlap
+            overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
+                        for seg in committed_segments)
+            if overlap:
+                continue  # too much overlap with currently active segments
+
+            # Step 4: Estimate user supply and value
+            # **normalize**: get per‑day users, then total expected over the campaign window
+            daily_users    = self.estimate_segment_size(campaign.target_segment)
+            expected_users = daily_users * duration
+            expected_value = min(R, expected_users)
+
+            # Step 5: Determine bid based on quality and urgency
+            is_short = duration <= 2
+            base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
+            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
+            clipped_bid = self.clip_campaign_bid(campaign, raw_bid)
+
+            if self.is_valid_campaign_bid(campaign, clipped_bid):
+                campaign_bids[campaign] = clipped_bid
+        return campaign_bids
+
 
     # optional: clear per‑game state
     def on_new_game(self):
