@@ -114,11 +114,6 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         # TODO: fill this in
         bundles = set()
 
-    #     class BidBundle:
-    # campaign_id: int 
-    # limit: float 
-    # bid_entries: Set[Bid]
-
         active_campaigns = self.get_active_campaigns()
 
         for campaign in active_campaigns:
@@ -150,7 +145,7 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
             # print(item_bid)
 
 
-            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = 0.9, bid_limit = budget)
+            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = item_bid, bid_limit = budget)
 
             bid_set = set()
             bid_set.add(bid)
