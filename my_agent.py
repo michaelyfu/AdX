@@ -1,4 +1,3 @@
- # ─────────────────── imports ─────────────────────────────────────────────
 import cvxpy as cp
 import numpy as np
 from typing import Set, Dict
@@ -7,69 +6,13 @@ from agt_server.agents.base_agents.adx_agent import NDaysNCampaignsAgent
 from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaignsAgent
 from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, MarketSegment
-# ─────────────────────────────────────────────────────────────────────────
 
-# ─────────────────── helper to inspect market segments ───────────────────
-class MSegment:
-    """
-    Convenience wrapper that turns a market‑segment string into useful booleans
-    and a unique int code (0‑26).  Only needed by get_campaign_bids().
-    """
-    base3_map = {
-        "MALE_YOUNG_LOWINCOME":    0,  "MALE_YOUNG_HIGHINCOME":   3,
-        "FEMALE_YOUNG_LOWINCOME":  9,  "FEMALE_YOUNG_HIGHINCOME":12,
+class MyAgent(NDaysNCampaignsAgent):
 
-        "MALE_OLD_LOWINCOME":      1,  "MALE_OLD_HIGHINCOME":     4,
-        "FEMALE_OLD_LOWINCOME":   10,  "FEMALE_OLD_HIGHINCOME":  13,
-
-        "FEMALE_LOWINCOME":       11,  "FEMALE_HIGHINCOME":      14,
-        "YOUNG_LOWINCOME":        18,  "YOUNG_HIGHINCOME":       21,
-        "OLD_LOWINCOME":          19,  "OLD_HIGHINCOME":         22,
-
-        "MALE_YOUNG":               6,  "MALE_OLD":                 7,
-        "FEMALE_YOUNG":            15,  "FEMALE_OLD":              16,
-
-        "MALE_LOWINCOME":          2,  "MALE_HIGHINCOME":         5,
-    }
-
-    def __init__(self, market_str: str):
-        self.ms_int = self.parse(market_str.upper())
-
-        gender = self.ms_int // 9
-        income = (self.ms_int % 9) // 3
-        age    = self.ms_int % 3
-
-        self.is_male        = (gender == 0) or (gender == 2)
-        self.is_female      = (gender == 1) or (gender == 2)
-        self.is_low_income  = (income == 0) or (income == 2)
-        self.is_high_income = (income == 1) or (income == 2)
-        self.is_young       = (age    == 0) or (age    == 2)
-        self.is_old         = (age    == 1) or (age    == 2)
-
-    @classmethod
-    def parse(cls, s):
-        if s not in cls.base3_map:
-            raise ValueError(f"Unknown market segment {s}")
-        return cls.base3_map[s]
-
-    def get_map(self):
-        return {
-            "male":        self.is_male,
-            "female":      self.is_female,
-            "low_income":  self.is_low_income,
-            "high_income": self.is_high_income,
-            "young":       self.is_young,
-            "old":         self.is_old,
-        }
-
-class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
-
-    def __init__(self, name: str = "LINSANITY 2.0", beta=0.4):
+    def __init__(self, name: str = "original"):
         super().__init__()
         self.name = name
-        self.beta = beta
 
-        # Average number of *daily* users in each primitive segment (hand‑out table).
         self.market_segment_map: Dict[str, int] = {
             "MALE_YOUNG_LOWINCOME":   1836,
             "MALE_YOUNG_HIGHINCOME":   517,
@@ -165,77 +108,20 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         
         return bundles
 
-    def estimate_segment_size(self, target_segment: MarketSegment) -> int:
-        """
-        Return the *daily* number of users matching target_segment,
-        by summing over all atomic (3‑attribute) segments whose attributes
-        contain target_segment (i.e. atomic ⊇ target).
-        """
-        total = 0
-        for seg_str, count in self.atomic_segment_map.items():
-            atomic_attrs = set(seg_str.split("_"))  # e.g. {"FEMALE","OLD","LOWINCOME"}
-            # if every attr in target_segment is in this atomic_attrs
-            if set(target_segment).issubset(atomic_attrs):
-                total += count
-        return total
-    
-    def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
-            
-            campaign_bids = {}
-            current_day = self.get_current_day()
-            quality_score = self.get_quality_score()
-
-            # Step 1: Build the set of segments we're already targeting
-            active_campaigns = self.get_active_campaigns()
-            committed_segments = set()
-            for camp in active_campaigns:
-                committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
-
-            # Step 2: Decide bids
-            for campaign in campaigns_for_auction:
-                R = campaign.reach
-                start_day, end_day = campaign.start_day, campaign.end_day
-                duration = end_day - start_day + 1
-
-                # Step 3: Skip campaigns with overlap
-                overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
-                            for seg in committed_segments)
-                if overlap:
-                    continue  # too much overlap with currently active segments
-
-                # Step 4: Estimate user supply and value
-                # **normalize**: get per‑day users, then total expected over the campaign window
-                daily_users    = self.estimate_segment_size(campaign.target_segment)
-                expected_users = daily_users * duration
-                expected_value = min(R, expected_users)
-
-                is_short = (duration <= 2)
-                base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-                raw_bid  = base_bid \
-                        * (0.9 if current_day >= start_day else 1.0) \
-                        * (0.9 if is_short else 1.0)
-
-                # 5) DYNAMIC PACING BOOST
-                # remaining_reach = R (we haven't won any for this new campaign yet)
-                
-                remaining_days = max(1, duration - (current_day - start_day + 1))
-                pace = min(1.0, R / (remaining_days * max(1, daily_users)))
-                pacing_mult = 1.0 + self.beta * (1.0 - pace)
-                raw_bid *= pacing_mult
-
-                # 6) clip & validate
-                clipped = self.clip_campaign_bid(campaign, raw_bid)
-                if self.is_valid_campaign_bid(campaign, clipped):
-                    campaign_bids[campaign] = clipped
-
-            return campaign_bids
+    # ───────────────── daily campaign bids ────────────────────────── 
+    def get_campaign_bids(self, auctions: Set[Campaign]) -> Dict[Campaign, float]:
+        bids = {}
+        for c in auctions:
+            bids[c] = max(0.1 * c.reach, 0.9 * c.reach)
+        return bids
 
     # optional: clear per‑game state
     def on_new_game(self):
         pass
 
-# ─────────────────── quick offline test harness ─────────────────────────
 if __name__ == "__main__":
-    bots = [MyNDaysNCampaignsAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
+    bots = [MyAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
     AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
     
+
+my_agent_submission = MyAgent()
