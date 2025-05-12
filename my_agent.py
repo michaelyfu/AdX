@@ -5,6 +5,8 @@ from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, Mar
 from typing import Set, Dict
 import math
 
+from game_theoretic_equilibrium import Agent, AuctionSimulation
+
 class MSegment():
 
     def __init__(self, market_str):
@@ -75,7 +77,7 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
     def __init__(self):
         # TODO: fill this in (if necessary)
         super().__init__()
-        self.name = "john"  # TODO: enter a name.
+        self.name = "game-theory"  # TODO: enter a name.
 
         market_segment_map = {
             "MALE_YOUNG_LOWINCOME":   1836,
@@ -125,82 +127,23 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         active_campaigns = self.get_active_campaigns()
 
         for campaign in active_campaigns:
-
-            if campaign not in self.price_index:
-                self.price_index[campaign] = 0.95
-
-            # First, set budget based on reach, price, and environment
-
-            days_passed = self.get_current_day() - campaign.start_day
-            total_days = campaign.end_day - campaign.start_day + 1
-            days_left = total_days - days_passed
-
-            def calculate_price_index():
-                reach_proportion = campaign.reach / (self.market_segment_map[campaign.target_segment.name.upper()] ) 
-
-                reach_proportion_gap = 0
-                new_price_index = 0.95
-
-                # Estimate price index based on previous data
-                if days_passed == 0:
-                    new_price_index = 0.9 + (reach_proportion - 0.3) / 4
-
-                else:
-                    reach_proportion_gap = (self.get_cumulative_reach(campaign) / campaign.reach) * (total_days / days_passed) - reach_proportion
-                    # Positive values mean we have more reach than necessary, so price index goes down
-
-                    new_price_index -= reach_proportion_gap * 0.1
-                
-                if days_left == 0 and (days_passed == 0 or reach_proportion_gap < -0.05):
-                    # Last day
-                    new_price_index += 0.1
-                
-                
-                new_price_index += (0.1 - (math.sqrt(campaign.reach) - 16) / (50 * 5)) # Go harder on small campaigns for more quality score boost
-
-                self.price_index[campaign] = 0.5 * self.price_index[campaign] + 0.5 * new_price_index
-                    
-            def calculate_env_index():
-
-                new_env_index = 1.0
-
-                if self.get_current_day() > 8:
-                    new_env_index -= 0.06
-                elif self.get_current_day() > 5:
-                    new_env_index -= 0.03
-
-                if quality_score < 0.9 and self.get_current_day() < 9:
-                    new_env_index += 1
-                
-                if quality_score > 1.1:
-                    new_env_index -= 0.05
-                
-                self.env_index = new_env_index
-                
-                
-
-            calculate_price_index()
-            calculate_env_index()
-
-            budget = campaign.reach * self.price_index[campaign] * self.env_index
-
-            item_bid = budget / campaign.reach
-
-            # Expand budget if necessary
-
-
-
-            print(f"Bid: {item_bid}, Quality Score: {quality_score}, Price Index: {self.price_index[campaign]}, Env Index: {self.env_index}")
-
-            print(f"Day {self.get_current_day()}, Campaign starts on {campaign.start_day} and ends on {campaign.end_day}, {self.get_cumulative_reach(campaign) / campaign.reach}, {days_passed}")
-
-            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = item_bid, bid_limit = budget)
+            
+            MARKET_SEGMENT = campaign.target_segment
+            simulation = AuctionSimulation(MARKET_SEGMENT)
+            
+            NUM_SIMULATIONS = 100 
+            best_bids = []
+            for i in range(NUM_SIMULATIONS):
+                best_bids.append(simulation.simulate())
+            avg_best_bid = sum(best_bids) / len(best_bids)
+            
+            
+            
+            bid:Bid = Bid(bidder = self, auction_item = MARKET_SEGMENT, bid_per_item = avg_best_bid, bid_limit = campaign.reach)
 
             bid_set = set()
             bid_set.add(bid)
-
-            bundle = BidBundle(campaign_id = campaign.uid, limit = budget, bid_entries = bid_set)
-
+            bundle = BidBundle(campaign_id = campaign.uid, limit = campaign.reach, bid_entries = bid_set)
             bundles.add(bundle)
 
         return bundles

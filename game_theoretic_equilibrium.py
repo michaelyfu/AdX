@@ -19,16 +19,17 @@ agents = []
 
 class Agent:
 
-    def __init__(self, id):
+    def __init__(self, id, market_segment):
 
-        market_segment = random.choice(MarketSegment.all_segments())
+        # market_segment = random.choice(MarketSegment.all_segments())
         # print(market_segment.name)
         # print(self.get_segment_size(market_segment.name))
 
         reach_factor = random.choice(REACH_FACTORS) # if id != "John" else 0.3
         reach = reach_factor * self.get_segment_size(market_segment.name)
         budget = reach
-        BID_SHADING_FACTOR = 0.8 + 0.3 * random.random()
+        # BID_SHADING_FACTOR = 0.8 + 0.3 * random.random()
+        BID_SHADING_FACTOR = 0.80000002 + 0.2 * random.random()
         
         bid_per_item = BID_SHADING_FACTOR * budget / reach 
 
@@ -36,7 +37,7 @@ class Agent:
         self.campaign = Campaign(reach, market_segment, 1, 1)
         self.bid = Bid(id, market_segment, bid_per_item, budget)
 
-        print(f"Initializing agent {id} with reach {reach} and bid {bid_per_item} and segment {market_segment.name}")
+        # print(f"Initializing agent {id} with reach {reach} and bid {bid_per_item} and segment {market_segment.name}")
     
     def get_id(self):
         return self.id
@@ -73,11 +74,12 @@ class Agent:
 
 class AuctionSimulation:
 
-    def __init__(self):
+    def __init__(self, MARKET_SEGMENT):
+        self.MARKET_SEGMENT = MARKET_SEGMENT
         self.reset()
 
     def reset(self):
-        agents = [Agent(i) for i in range(NUM_AGENTS)]
+        agents = [Agent(i, self.MARKET_SEGMENT) for i in range(NUM_AGENTS)]
         
         self.agents = agents
         self.agents.sort(key = lambda agent: agent.bid.bid_per_item, reverse = True)
@@ -93,7 +95,7 @@ class AuctionSimulation:
             MarketSegment(("Female", "Old", "HighIncome")): 407
         }
 
-        print(f"Agents in descending order: {[agent.get_id() for agent in self.agents]}")
+        # print(f"Agents in descending order: {[agent.get_id() for agent in self.agents]}")
         
     def sample_random_users(self):
     
@@ -124,7 +126,7 @@ class AuctionSimulation:
 
                 if not my_agent.bid.item.issubset(user_segment):
                     # if not applicable to my_agent, skip
-                    print(f"Agents in descending order: {[agent.get_id() for agent in segment_agent_rankings]} in {user_segment.name}")
+                    # print(f"Agents in descending order: {[agent.get_id() for agent in segment_agent_rankings]} in {user_segment.name}")
                     continue
 
                 # add my_agent
@@ -132,7 +134,7 @@ class AuctionSimulation:
                 my_agent.bid.bid_per_item = segment_agent_rankings[k].bid.bid_per_item + EPSILON if k < len(segment_agent_rankings) else EPSILON
                 segment_agent_rankings.insert(min(k, len(segment_agent_rankings)), my_agent)
 
-                print(f"Agents in descending order: {[agent.get_id() for agent in segment_agent_rankings]} in {user_segment}")
+                # print(f"Agents in descending order: {[agent.get_id() for agent in segment_agent_rankings]} in {user_segment}")
         
         new_rankings = {key: value.copy() for key, value in agent_rankings.items()}
 
@@ -177,7 +179,7 @@ class AuctionSimulation:
         for agent in eff_reach.keys():
             eff_reach[agent] = self.effective_reach(x[agent], agent.campaign.reach)
             utility[agent] = eff_reach[agent] * agent.bid.bid_limit - p[agent]
-            print(f"""Agent {agent.get_id()} bids {agent.bid.bid_per_item}, gets allocation {x[agent]}, payment {p[agent]}, effective reach {eff_reach[agent]}, utility {utility[agent]}""")
+            # print(f"""Agent {agent.get_id()} bids {agent.bid.bid_per_item}, gets allocation {x[agent]}, payment {p[agent]}, effective reach {eff_reach[agent]}, utility {utility[agent]}""")
 
         return bid, x, p, eff_reach, utility
         
@@ -188,7 +190,7 @@ class AuctionSimulation:
 
         self.reset()
         
-        my_agent = Agent("John")
+        my_agent = Agent("John", self.MARKET_SEGMENT)
         effective_reaches = []
         my_agent_utilities = []
         bids = []
@@ -208,8 +210,8 @@ class AuctionSimulation:
                     
 
         for k in range(4):
-            print("====================================")
-            print(f"Running simulation for position {k}")
+            # print("====================================")
+            # print(f"Running simulation for position {k}")
 
             # SIMULATION AT A HIGH LEVEL:
 
@@ -227,8 +229,8 @@ class AuctionSimulation:
             effective_reaches.append(eff_reach[my_agent])
             my_agent_utilities.append(utility[my_agent])
 
-            print("------------------------------------")
-            print(f"Final stats for position {k}: bid {bid[my_agent]}, allocation {x[my_agent]}, payment {p[my_agent]}, effective reach {eff_reach[my_agent]}, utility {utility[my_agent]}")
+            # print("------------------------------------")
+            # print(f"Final stats for position {k}: bid {bid[my_agent]}, allocation {x[my_agent]}, payment {p[my_agent]}, effective reach {eff_reach[my_agent]}, utility {utility[my_agent]}")
         
         max_eff_reach = max(effective_reaches)
         max_index = effective_reaches.index(max_eff_reach)
@@ -236,21 +238,21 @@ class AuctionSimulation:
         max_utility = my_agent_utilities[max_index]
         best_bid = bids[max_index]
 
-        print("====================================")
-        print(f"Best position for {my_agent.get_id()} is position {max_index} with bid {best_bid}, with effective reach {max_eff_reach} and utility {max_utility}")
+        # print("====================================")
+        # print(f"Best position for {my_agent.get_id()} is position {max_index} with bid {best_bid}, with effective reach {max_eff_reach} and utility {max_utility}")
 
         return best_bid
 
-simulation = AuctionSimulation()
+# simulation = AuctionSimulation()
 
-NUM_SIMULATIONS = 1000
-best_bids = []
+# NUM_SIMULATIONS = 1000
+# best_bids = []
 
-for i in range(NUM_SIMULATIONS):
-    best_bids.append(simulation.simulate())
+# for i in range(NUM_SIMULATIONS):
+#     best_bids.append(simulation.simulate())
 
-print(best_bids)
-print(f"Average best bid: {sum(best_bids) / len(best_bids)}")
+# print(best_bids)
+# print(f"Average best bid: {sum(best_bids) / len(best_bids)}")
 
 # agent_i = agents_list[i]
             # bid_segment = agent_i.bid.item

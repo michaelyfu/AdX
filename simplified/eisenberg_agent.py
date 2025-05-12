@@ -105,6 +105,9 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             "FEMALE_OLD_HIGHINCOME":    407,
         }
 
+        self.my_quality_score = self.get_quality_score()
+        # self.GREED = 1.1
+
     # ───────────────── EG solver ──────────────────────────
     def _solve_eg_market(self, campaigns):
         if not campaigns:
@@ -135,6 +138,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
     def get_ad_bids(self) -> Set[BidBundle]:
         bundles = set()
         active_campaigns = list(self.get_active_campaigns())
+        
         try:
             prices, alloc, idx = self._solve_eg_market(active_campaigns)
             
@@ -185,6 +189,12 @@ class EisenbergAgent(NDaysNCampaignsAgent):
     #     return bids
 
     def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
+        
+        # if self.get_quality_score() < self.my_quality_score:
+        #     self.GREED *= 1.07
+        # elif self.get_quality_score() > self.my_quality_score:
+        #     self.GREED * 0.95
+            
         campaign_bids = {}
         current_day = self.get_current_day()
         quality_score = self.get_quality_score()
@@ -217,7 +227,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             is_short = duration <= 2
             base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
             raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
-            clipped_bid = self.clip_campaign_bid(campaign, raw_bid)
+            clipped_bid = self.clip_campaign_bid(campaign, raw_bid) 
 
             if self.is_valid_campaign_bid(campaign, clipped_bid):
                 campaign_bids[campaign] = clipped_bid
@@ -231,4 +241,4 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 # ─────────────────── quick offline test harness ─────────────────────────
 if __name__ == "__main__":
     bots = [EisenbergAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
-    AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
+    AdXGameSimulator().run_simulation(agents=bots, num_simulations=50)
