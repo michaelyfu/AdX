@@ -3,7 +3,6 @@ from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaign
 from agt_server.local_games.adx_arena import AdXGameSimulator 
 from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, MarketSegment
 from typing import Set, Dict
-import math
 
 class MSegment():
 
@@ -104,95 +103,47 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
         self.market_segment_map = market_segment_map
 
-        self.price_index = {}
-        self.env_index = 1.0
-
         
 
     def on_new_game(self) -> None:
         # TODO: fill this in (if necessary)
         
-        self.price_index = {}
-        self.env_index = 1.0
+        pass
 
     def get_ad_bids(self) -> Set[BidBundle]:
         # TODO: fill this in
-
-        quality_score = self.get_quality_score()
-
         bundles = set()
 
         active_campaigns = self.get_active_campaigns()
 
         for campaign in active_campaigns:
 
-            if campaign not in self.price_index:
-                self.price_index[campaign] = 0.95
+            reach_proportion = campaign.reach / (self.market_segment_map[campaign.target_segment.name.upper()] ) 
 
-            # First, set budget based on reach, price, and environment
+            item_bid = 0.9
+            budget = campaign.reach
 
-            days_passed = self.get_current_day() - campaign.start_day
-            total_days = campaign.end_day - campaign.start_day + 1
-            days_left = total_days - days_passed
+            if reach_proportion < 0.4:
+                item_bid = 0.88001
+            elif reach_proportion < 0.6:
+                item_bid = 0.90001
+            else:
+                item_bid = 0.92001
+            
+            if campaign.reach < 800:
+                budget *= 1.1
+            elif campaign.reach < 2000:
+                budget *= 1.05
+            
+            if campaign.start_day < 4:
+                item_bid += 0.02
+                budget *= 1.05
+            elif campaign.start_day < 7:
+                item_bid += 0.01
+                budget *= 1.03
 
-            def calculate_price_index():
-                reach_proportion = campaign.reach / (self.market_segment_map[campaign.target_segment.name.upper()] ) 
+            # print(item_bid)
 
-                reach_proportion_gap = 0
-                new_price_index = 0.95
-
-                # Estimate price index based on previous data
-                if days_passed == 0:
-                    new_price_index = 0.9 + (reach_proportion - 0.3) / 4
-
-                else:
-                    reach_proportion_gap = (self.get_cumulative_reach(campaign) / campaign.reach) * (total_days / days_passed) - reach_proportion
-                    # Positive values mean we have more reach than necessary, so price index goes down
-
-                    new_price_index -= reach_proportion_gap * 0.1
-                
-                if days_left == 0 and (days_passed == 0 or reach_proportion_gap < -0.05):
-                    # Last day
-                    new_price_index += 0.1
-                
-                
-                new_price_index += (0.1 - (math.sqrt(campaign.reach) - 16) / (50 * 5)) # Go harder on small campaigns for more quality score boost
-
-                self.price_index[campaign] = 0.5 * self.price_index[campaign] + 0.5 * new_price_index
-                    
-            def calculate_env_index():
-
-                new_env_index = 1.0
-
-                if self.get_current_day() > 8:
-                    new_env_index -= 0.06
-                elif self.get_current_day() > 5:
-                    new_env_index -= 0.03
-
-                if quality_score < 0.9 and self.get_current_day() < 9:
-                    new_env_index += 1
-                
-                if quality_score > 1.1:
-                    new_env_index -= 0.05
-                
-                self.env_index = new_env_index
-                
-                
-
-            calculate_price_index()
-            calculate_env_index()
-
-            budget = campaign.reach * self.price_index[campaign] * self.env_index
-
-            item_bid = budget / campaign.reach
-
-            # Expand budget if necessary
-
-
-
-            print(f"Bid: {item_bid}, Quality Score: {quality_score}, Price Index: {self.price_index[campaign]}, Env Index: {self.env_index}")
-
-            print(f"Day {self.get_current_day()}, Campaign starts on {campaign.start_day} and ends on {campaign.end_day}, {self.get_cumulative_reach(campaign) / campaign.reach}, {days_passed}")
 
             bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = item_bid, bid_limit = budget)
 
@@ -211,8 +162,6 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         # make enum that's like 0 if no overlap
         # 1 if general segment overlap (like male old and male young)
         # 2 if actual overlap (male old, male old high income)
-
-        quality_score = self.get_quality_score()
 
         active_campaigns = self.get_active_campaigns()
 
@@ -272,10 +221,10 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
         for campaign in campaigns_for_auction:
             if campaign_overlap_map[campaign.target_segment.name.upper()] == 1: # partial
-                res_dict[campaign] = self.clip_campaign_bid(campaign, campaign.reach * 0.9 * self.env_index)
+                res_dict[campaign] = campaign.reach * 0.99
             
             if campaign_overlap_map[campaign.target_segment.name.upper()] == 0: # no overlap
-                res_dict[campaign] = self.clip_campaign_bid(campaign, campaign.reach * 0.75 * self.env_index)
+                res_dict[campaign] = campaign.reach * 0.9
 
         return res_dict
 
@@ -286,6 +235,6 @@ if __name__ == "__main__":
 
     # Don't change this. Adapt initialization to your environment
     simulator = AdXGameSimulator()
-    simulator.run_simulation(agents=test_agents, num_simulations=50)
+    simulator.run_simulation(agents=test_agents, num_simulations=500)
 
 my_agent_submission = MyNDaysNCampaignsAgent()
