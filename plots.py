@@ -4,7 +4,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import List, Dict, Any, Union, Sequence
-from simplified.eisenberg_agent import EisenbergAgent
+from model_equilibrium.beta import BetaAgent
 from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaignsAgent
 from agt_server.agents.base_agents.adx_agent import NDaysNCampaignsAgent
@@ -26,7 +26,7 @@ def run_experiment(beta_values, num_simulations=50):
         print(f"Testing beta factor: {beta:.2f}")
         
         # Create our agent with the current value
-        eisenberg_agent = EisenbergAgent(name=f"Eisenberg-{beta:.2f}", beta=beta)
+        eisenberg_agent = BetaAgent(name=f"Eisenberg-{beta:.2f}", beta=beta)
         
         # Create baseline agents
         baseline_agents = [Tier1NDaysNCampaignsAgent(name=f"Tier1-{i}") for i in range(9)]
@@ -72,12 +72,12 @@ def plot_results(values, profits):
                  textcoords='offset points',
                  arrowprops=dict(arrowstyle='->'))
     
-    plt.savefig('beta_experiment_results.png')
+    plt.savefig('beta_experiment_results-2.png')
     plt.show()
 
 if __name__ == "__main__":
     # Define the range of values to test
-    beta_values = np.linspace(0.3, 1.0, 8)  # Test from 0.3 to 1.0 in steps of 0.1
+    beta_values = np.arange(0.35, 0.45 + 0.02, 0.02)  # Test from 0.35 to 0.45 in steps of 0.02
     
     # Run multiple experiments and average results
     num_experiments = 5
