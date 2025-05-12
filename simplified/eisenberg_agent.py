@@ -64,7 +64,7 @@ class MSegment:
 
 class EisenbergAgent(NDaysNCampaignsAgent):
 
-    def __init__(self, name: str = "EisenbergAgent", greed_factor=1.2):
+    def __init__(self, name: str = "EisenbergAgent"):
         super().__init__()
         self.name = name
 
@@ -105,13 +105,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             "FEMALE_OLD_HIGHINCOME":    407,
         }
 
-        self.greed_factor = greed_factor # it's set to 1.2 in the paper
-        # --- Greed / CI parameters --------------------------------------
-        self.GREED = max(1.0, greed_factor)           
-        self._ci   = 1.0                               # Competing‑Index (CI)
-        self._prev_day_bids: Dict[int, float] = {}     # uid → bid we sent
-        # ----------------------------------------------------------------
-
+        self._prev_day_seg_price = {}
 
     # ───────────────── EG solver ──────────────────────────
     def _solve_eg_market(self, campaigns):
@@ -137,6 +131,10 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
         p = constraints[0].dual_value
         prices = {s: float(max(v, 0)) for s, v in zip(segments, p)}
+        
+        for seg, price in prices.items():
+            self._prev_day_seg_price[seg] = price
+        
         return prices, X.value, seg_to_idx
 
     # ─────────────────  daily ad bids  ────────────────────────────────
@@ -187,8 +185,6 @@ class EisenbergAgent(NDaysNCampaignsAgent):
     
     def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
 
-        # --- incorporate previous‑day auction result --------------------
-        self._roll_ci_after_contract_auction(campaigns_for_auction)
         # ----------------------------------------------------------------
         
         campaign_bids = {}
@@ -197,6 +193,11 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
         # Step 1: Build the set of segments we're already targeting
         active_campaigns = self.get_active_campaigns()
+        if active_campaigns:
+            avg_cpv = float(np.mean([c.budget / c.reach for c in active_campaigns]))
+        else:
+            avg_cpv = 1.0
+
         committed_segments = set()
         for camp in active_campaigns:
             committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
@@ -222,50 +223,23 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             # Step 5: Determine bid based on quality and urgency
             is_short = duration <= 2
             base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            # raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
-            raw_bid  = base_bid * self._ci   # ← ①  CI here
+            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
+            # --- B) dual-price shading
+            seg = campaign.target_segment.name.upper()
+            # yesterday’s price for this segment (initialize in __init__ to 1.0)
+            p_seg = self._prev_day_seg_price.get(seg, 1.0)
 
-            clipped_bid = self.clip_campaign_bid(campaign, raw_bid) 
+            # use avg_cpv as your “marginal_value”
+            mv      = avg_cpv
+            gap     = max(mv - p_seg, 0.0)
+            raw_bid *= 1.0 + 0.75 * (gap / mv)
 
-            if self.is_valid_campaign_bid(campaign, clipped_bid):
-                campaign_bids[campaign] = clipped_bid
-                self._prev_day_bids[campaign.uid] = clipped_bid  # track
+            # clip & validate
+            clipped = self.clip_campaign_bid(campaign, raw_bid)
+            if self.is_valid_campaign_bid(campaign, clipped):
+                campaign_bids[campaign] = clipped
+
         return campaign_bids
-
-    # ----- CI book‑keeping  ---------------------------------------------
-    def _roll_ci_after_contract_auction(self,
-                                        todays_contracts: Set[Campaign]) -> None:
-        """Update CI using yesterday’s outcomes (paper Eq. (5))."""
-        # ❶ campaigns we still see today ⇒ we *lost* yesterday
-        lost_uids = {
-            c.uid
-            for c in todays_contracts
-            if c.uid in self._prev_day_bids
-        }
-
-        # ❷ campaigns that moved to our active list ⇒ we *won*
-        won_campaigns = {
-            c for c in self.get_active_campaigns()
-            if c.uid in self._prev_day_bids
-        }
-
-        # -- CI update ---------------------------------------------------
-        if lost_uids:
-            # we failed → CI ← G * CI
-            self._ci *= self.GREED
-        for camp in won_campaigns:
-            bid     = self._prev_day_bids[camp.uid]
-            # budget is only exposed to the winner
-            if np.isclose(camp.budget, bid):
-                # random assignment → CI unchanged
-                pass
-            else:
-                # standard 2nd‑price win → CI ← CI / G
-                self._ci /= self.GREED
-
-        # clear history for next round
-        self._prev_day_bids.clear()
-
 
     # optional: clear per‑game state
     def on_new_game(self):
