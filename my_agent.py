@@ -5,7 +5,7 @@ from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, Mar
 from typing import Set, Dict
 import math
 
-from game_theoretic_equilibrium import Agent, AuctionSimulation
+# from game_theoretic_equilibrium import Agent, AuctionSimulation
 
 class MSegment():
 
@@ -129,21 +129,21 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         for campaign in active_campaigns:
             
             MARKET_SEGMENT = campaign.target_segment
-            simulation = AuctionSimulation(MARKET_SEGMENT)
+            # simulation = AuctionSimulation(MARKET_SEGMENT)
             
-            NUM_SIMULATIONS = 100 
-            best_bids = []
-            for i in range(NUM_SIMULATIONS):
-                best_bids.append(simulation.simulate())
-            avg_best_bid = sum(best_bids) / len(best_bids)
+            # NUM_SIMULATIONS = 100 
+            # best_bids = []
+            # for i in range(NUM_SIMULATIONS):
+            #     best_bids.append(simulation.simulate())
+            # avg_best_bid = sum(best_bids) / len(best_bids)
             
+            avg_best_bid = 0.983
             
-            
-            bid:Bid = Bid(bidder = self, auction_item = MARKET_SEGMENT, bid_per_item = avg_best_bid, bid_limit = campaign.reach)
+            bid:Bid = Bid(bidder = self, auction_item = MARKET_SEGMENT, bid_per_item = avg_best_bid, bid_limit = campaign.reach * 1.2)
 
             bid_set = set()
             bid_set.add(bid)
-            bundle = BidBundle(campaign_id = campaign.uid, limit = campaign.reach, bid_entries = bid_set)
+            bundle = BidBundle(campaign_id = campaign.uid, limit = campaign.reach * 1.2, bid_entries = bid_set)
             bundles.add(bundle)
 
         return bundles

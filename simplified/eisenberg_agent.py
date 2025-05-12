@@ -211,6 +211,10 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             start_day, end_day = campaign.start_day, campaign.end_day
             duration = end_day - start_day + 1
 
+            print(self.estimate_segment_size(campaign.target_segment))
+            # reach_factor = campaign.reach / (self.estimate_segment_size(campaign.target_segment) * duration)
+            # print(reach_factor)
+
             # Step 3: Skip campaigns with overlap
             overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
                         for seg in committed_segments)
