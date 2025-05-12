@@ -64,7 +64,7 @@ class MSegment:
 
 class EisenbergAgent(NDaysNCampaignsAgent):
 
-    def __init__(self, name: str = "EisenbergAgent"):
+    def __init__(self, name: str = "EisenbergAgent", greed_factor=1.2):
         super().__init__()
         self.name = name
 
@@ -105,8 +105,13 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             "FEMALE_OLD_HIGHINCOME":    407,
         }
 
-        self.my_quality_score = self.get_quality_score()
-        # self.GREED = 1.1
+        self.greed_factor = greed_factor # it's set to 1.2 in the paper
+        # --- Greed / CI parameters --------------------------------------
+        self.GREED = max(1.0, greed_factor)           
+        self._ci   = 1.0                               # Competing‑Index (CI)
+        self._prev_day_bids: Dict[int, float] = {}     # uid → bid we sent
+        # ----------------------------------------------------------------
+
 
     # ───────────────── EG solver ──────────────────────────
     def _solve_eg_market(self, campaigns):
@@ -179,22 +184,13 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             if set(target_segment).issubset(atomic_attrs):
                 total += count
         return total
-
-    # def get_campaign_bids(self, auctions: Set[Campaign]) -> Dict[Campaign, float]:
-    #     # your original overlap heuristic is kept here for brevity
-    #     # (or drop in your own EG‑based bidding rule later)
-    #     bids = {}
-    #     for c in auctions:
-    #         bids[c] = max(0.1 * c.reach, 0.9 * c.reach)  # very simple placeholder
-    #     return bids
-
+    
     def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
+
+        # --- incorporate previous‑day auction result --------------------
+        self._roll_ci_after_contract_auction(campaigns_for_auction)
+        # ----------------------------------------------------------------
         
-        # if self.get_quality_score() < self.my_quality_score:
-        #     self.GREED *= 1.07
-        # elif self.get_quality_score() > self.my_quality_score:
-        #     self.GREED * 0.95
-            
         campaign_bids = {}
         current_day = self.get_current_day()
         quality_score = self.get_quality_score()
@@ -226,12 +222,49 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             # Step 5: Determine bid based on quality and urgency
             is_short = duration <= 2
             base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
+            # raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
+            raw_bid  = base_bid * self._ci   # ← ①  CI here
+
             clipped_bid = self.clip_campaign_bid(campaign, raw_bid) 
 
             if self.is_valid_campaign_bid(campaign, clipped_bid):
                 campaign_bids[campaign] = clipped_bid
+                self._prev_day_bids[campaign.uid] = clipped_bid  # track
         return campaign_bids
+
+    # ----- CI book‑keeping  ---------------------------------------------
+    def _roll_ci_after_contract_auction(self,
+                                        todays_contracts: Set[Campaign]) -> None:
+        """Update CI using yesterday’s outcomes (paper Eq. (5))."""
+        # ❶ campaigns we still see today ⇒ we *lost* yesterday
+        lost_uids = {
+            c.uid
+            for c in todays_contracts
+            if c.uid in self._prev_day_bids
+        }
+
+        # ❷ campaigns that moved to our active list ⇒ we *won*
+        won_campaigns = {
+            c for c in self.get_active_campaigns()
+            if c.uid in self._prev_day_bids
+        }
+
+        # -- CI update ---------------------------------------------------
+        if lost_uids:
+            # we failed → CI ← G * CI
+            self._ci *= self.GREED
+        for camp in won_campaigns:
+            bid     = self._prev_day_bids[camp.uid]
+            # budget is only exposed to the winner
+            if np.isclose(camp.budget, bid):
+                # random assignment → CI unchanged
+                pass
+            else:
+                # standard 2nd‑price win → CI ← CI / G
+                self._ci /= self.GREED
+
+        # clear history for next round
+        self._prev_day_bids.clear()
 
 
     # optional: clear per‑game state
@@ -241,4 +274,4 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 # ─────────────────── quick offline test harness ─────────────────────────
 if __name__ == "__main__":
     bots = [EisenbergAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
-    AdXGameSimulator().run_simulation(agents=bots, num_simulations=50)
+    AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
