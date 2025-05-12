@@ -133,18 +133,33 @@ class EisenbergAgent(NDaysNCampaignsAgent):
 
     # ─────────────────  daily ad bids  ────────────────────────────────
     def get_ad_bids(self) -> Set[BidBundle]:
-        bundles          = set()
+        bundles = set()
         active_campaigns = list(self.get_active_campaigns())
-        prices, alloc, idx = self._solve_eg_market(active_campaigns)
+        try:
+            prices, alloc, idx = self._solve_eg_market(active_campaigns)
+            
+            for i, camp in enumerate(active_campaigns):
+                try:
+                    seg = camp.target_segment.name.upper()
+                    p_m = prices.get(seg, 1.0)
+                    
+                    # Check if seg is in idx before accessing
+                    if alloc is not None and seg in idx:
+                        qty = alloc[i, idx[seg]]
+                    else:
+                        qty = camp.reach / max(1, camp.end_day - camp.start_day + 1)
+                        
+                    spend = p_m * qty
+                    bid = Bid(self, camp.target_segment, p_m, spend)
+                    bundles.add(BidBundle(camp.uid, spend, {bid}))
+                except Exception as e:
+                    # print('error', e)
+                    continue
+        except Exception as e:
+            # Return empty set if the whole process fails
+            print('shouldnt happen', e)
+            return set()
         
-        for i, camp in enumerate(active_campaigns):
-            seg   = camp.target_segment.name.upper()
-            p_m   = prices.get(seg, 1.0)
-            qty   = alloc[i, idx[seg]] if alloc is not None else camp.reach / max(1, camp.end_day - camp.start_day + 1)
-            spend = p_m * qty
-
-            bid = Bid(self, camp.target_segment, p_m, spend)
-            bundles.add(BidBundle(camp.uid, spend, {bid}))
         return bundles
 
     def estimate_segment_size(self, target_segment: MarketSegment) -> int:
@@ -186,7 +201,7 @@ class EisenbergAgent(NDaysNCampaignsAgent):
             start_day, end_day = campaign.start_day, campaign.end_day
             duration = end_day - start_day + 1
 
-            # Step 3: Skip campaigns with significant overlap
+            # Step 3: Skip campaigns with overlap
             overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
                         for seg in committed_segments)
             if overlap:
