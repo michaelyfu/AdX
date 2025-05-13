@@ -5,6 +5,7 @@ from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, Mar
 from typing import Set, Dict, List
 from math import isfinite, atan
 from collections import Counter
+import matplotlib.pyplot as plt
 import random, copy
 
 # ONE DAY GAME
@@ -16,12 +17,13 @@ TOTAL_USERS = 10000
 EPSILON = 1e-9
 
 agents = []
+prev_output = []
 
 class Agent:
 
-    def __init__(self, id, market_segment):
+    def __init__(self, id):
 
-        # market_segment = random.choice(MarketSegment.all_segments())
+        market_segment = random.choice(MarketSegment.all_segments())
         # print(market_segment.name)
         # print(self.get_segment_size(market_segment.name))
 
@@ -31,8 +33,8 @@ class Agent:
         # BID_SHADING_FACTOR = 0.8 + 0.3 * random.random()
         BID_SHADING_FACTOR = 0.80000002 + 0.2 * random.random()
         
-        bid_per_item = reach_factor * budget / reach 
-        # bid_per_item = random.choice([0.9741329409304501, 0.995415697082667, 0.9881885248078961, 0.9732024548434302, 0.995658888037521, 0.9741329409304501, 0.9821748850986158, 0.9881885248078961, 0.9276765482985226, 0.9902044838972214, 0.995658888037521, 0.9741329409304501, 0.995658888037521, 0.9990807732756181, 0.9881885248078961, 0.9732024548434302, 0.995658888037521, 0.9990807732756181, 0.995658888037521, 0.9881885248078961, 0.995658888037521, 0.9602118547024135, 0.9959612034950209, 0.9645490919172214, 0.9887355877738415, 0.9132436250626869, 0.9515034794514745, 0.9881885248078961, 0.9990807732756181, 0.995658888037521, 0.9959612034950209, 0.9741329409304501, 0.995415697082667, 0.995415697082667, 0.9363389385422317, 0.9887355877738415, 0.9520687377320617, 0.9902044838972214, 0.995658888037521, 0.995658888037521, 0.9881885248078961, 0.9902044838972214, 0.9959612034950209, 0.995658888037521, 0.9990807732756181, 0.995658888037521, 0.9887355877738415, 0.995658888037521, 0.9881885248078961, 0.995658888037521])
+        # bid_per_item = BID_SHADING_FACTOR * budget / reach 
+        bid_per_item = random.choice(prev_output)
 
         self.id = id
         self.campaign = Campaign(reach, market_segment, 1, 1)
@@ -75,12 +77,12 @@ class Agent:
 
 class AuctionSimulation:
 
-    def __init__(self, MARKET_SEGMENT):
-        self.MARKET_SEGMENT = MARKET_SEGMENT
+    def __init__(self):
+        # self.MARKET_SEGMENT = MARKET_SEGMENT
         self.reset()
 
     def reset(self):
-        agents = [Agent(i, self.MARKET_SEGMENT) for i in range(NUM_AGENTS)]
+        agents = [Agent(i) for i in range(NUM_AGENTS)]
         
         self.agents = agents
         self.agents.sort(key = lambda agent: agent.bid.bid_per_item, reverse = True)
@@ -191,7 +193,7 @@ class AuctionSimulation:
 
         self.reset()
         
-        my_agent = Agent("John", self.MARKET_SEGMENT)
+        my_agent = Agent("John")
         effective_reaches = []
         my_agent_utilities = []
         bids = []
@@ -244,16 +246,36 @@ class AuctionSimulation:
 
         return best_bid
 
-# simulation = AuctionSimulation()
+prev_output = [0.4 + 0.7 * random.random() for _ in range(50)]
+
+simulation = AuctionSimulation()
 
 NUM_SIMULATIONS = 50
 best_bids = []
+averages = []
 
-# for i in range(NUM_SIMULATIONS):
-#     best_bids.append(simulation.simulate())
 
-# print(best_bids)
-# print(f"Average best bid: {sum(best_bids) / len(best_bids)}")
+for j in range(500):
+
+    for i in range(NUM_SIMULATIONS):
+        best_bids.append(simulation.simulate())
+
+    # print(best_bids)
+    print(f"Average best bid: {sum(best_bids) / len(best_bids)}")
+    averages.append(sum(best_bids) / len(best_bids))
+
+    prev_output = best_bids
+
+
+x = [i for i in range(500)]
+
+plt.plot(x, averages)
+plt.title("Average best bid")
+plt.xlabel("trial")
+plt.ylabel("avg best bid")
+plt.grid(True)
+plt.show()
+
 
 # agent_i = agents_list[i]
             # bid_segment = agent_i.bid.item
