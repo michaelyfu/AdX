@@ -57,11 +57,17 @@ from model_equilibrium.B99 import B99
 from model_equilibrium.beta import BetaAgent
 from model_equilibrium.eisenberg_agent import EisenbergAgent
 from model_equilibrium.greedy import Greedy
+from model_equilibrium.long import Long
+from model_equilibrium.hybrid import Hybrid
 
 def main():
-    bots = [JohnAgent()] + [B99()] + [BetaAgent()] + [EisenbergAgent()] + [Greedy()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(5)]
-    AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
-
+    # bots = [JohnAgent()] + [Hybrid()] + [Long()] + [B99()] + [BetaAgent()] + [EisenbergAgent()] + [Greedy()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(3)]
+    runs = 10
+    for i in range(runs):
+        bots = [Long()] + [Hybrid()] + [BetaAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(7)]
+        
+        # Run simulation and write results to log file
+        results = AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
 
 if __name__ == "__main__":
     main()

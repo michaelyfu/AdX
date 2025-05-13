@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 # using the eisenberg_agent, modulate various hyperparameters
 
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import List, Dict, Any, Union, Sequence
-from model_equilibrium.beta import BetaAgent
+from model_equilibrium.B99 import B99
 from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaignsAgent
 from agt_server.agents.base_agents.adx_agent import NDaysNCampaignsAgent
 
-def run_experiment(beta_values, num_simulations=50):
+def run_experiment(long_values, num_simulations=50):
     """
     Run simulations with different values and return the average profits.
     
@@ -22,11 +21,11 @@ def run_experiment(beta_values, num_simulations=50):
     """
     results = []
     
-    for beta in beta_values:
-        print(f"Testing beta factor: {beta:.2f}")
+    for long in long_values:
+        print(f"Testing long factor: {long:.2f}")
         
         # Create our agent with the current value
-        eisenberg_agent = BetaAgent(name=f"Eisenberg-{beta:.2f}", beta=beta)
+        eisenberg_agent = B99(name=f"Eisenberg-{long:.2f}", long_factor=long)
         
         # Create baseline agents
         baseline_agents = [Tier1NDaysNCampaignsAgent(name=f"Tier1-{i}") for i in range(9)]
@@ -55,29 +54,29 @@ def plot_results(values, profits):
     """Plot the results of the experiment."""
     plt.figure(figsize=(10, 6))
     plt.plot(values, profits, 'o-', linewidth=2)
-    plt.xlabel('Beta Value')
+    plt.xlabel('Long Value')
     plt.ylabel('Average Profit')
-    plt.title('EisenbergAgent Performance vs Beta Value')
+    plt.title('EisenbergAgent Performance vs Long Value')
     plt.grid(True)
     
-    # Find and mark the optimal beta value
+    # Find and mark the optimal long value
     optimal_idx = np.argmax(profits)
-    optimal_beta = beta_values[optimal_idx]
+    optimal_long = long_values[optimal_idx]
     optimal_profit = profits[optimal_idx]
     
-    plt.scatter([optimal_beta], [optimal_profit], color='red', s=100, zorder=5)
-    plt.annotate(f'Optimal: {optimal_beta:.2f}\nProfit: {optimal_profit:.2f}',
-                 xy=(optimal_beta, optimal_profit),
+    plt.scatter([optimal_long], [optimal_profit], color='red', s=100, zorder=5)
+    plt.annotate(f'Optimal: {optimal_long:.2f}\nProfit: {optimal_profit:.2f}',
+                 xy=(optimal_long, optimal_profit),
                  xytext=(10, -30),
                  textcoords='offset points',
                  arrowprops=dict(arrowstyle='->'))
     
-    plt.savefig('beta_experiment_results-2.png')
+    plt.savefig('long_experiment_results-2.png')
     plt.show()
 
 if __name__ == "__main__":
     # Define the range of values to test
-    beta_values = np.arange(0.35, 0.45 + 0.02, 0.02)  # Test from 0.35 to 0.45 in steps of 0.02
+    long_values = np.arange(0.3, 0.7 + 0.05, 0.05)  # Test from 0.3 to 0.7 in steps of 0.05
     
     # Run multiple experiments and average results
     num_experiments = 5
@@ -85,16 +84,16 @@ if __name__ == "__main__":
     
     for i in range(num_experiments):
         print('experiment num:', i + 1)
-        profits = run_experiment(beta_values)
+        profits = run_experiment(long_values)
         all_profits.append(profits)
     
     # Average the profits across experiments
     avg_profits = np.mean(all_profits, axis=0)
     
     # Plot the averaged results
-    plot_results(beta_values, avg_profits)
+    plot_results(long_values, avg_profits)
     
     # Print the optimal value based on averaged results
     optimal_idx = np.argmax(avg_profits)
-    print(f"\nOptimal beta value: {beta_values[optimal_idx]:.2f}")
+    print(f"\nOptimal long value: {long_values[optimal_idx]:.2f}")
     print(f"Optimal average profit: {avg_profits[optimal_idx]:.2f}")
