@@ -50,7 +50,7 @@ class MSegment:
             "old":         self.is_old,
         }
 
-from john_agent import JohnAgent
+from original_heuristic.john_agent import JohnAgent
 from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaignsAgent 
 from agt_server.local_games.adx_arena import AdXGameSimulator 
 from model_equilibrium.B99 import B99
