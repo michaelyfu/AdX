@@ -62,8 +62,8 @@ class Hybrid(NDaysNCampaignsAgent):
         supplies   = np.array([self.market_segment_map[s] for s in segments], dtype=float)
 
         X  = cp.Variable((n, m), nonneg=True)
-        ε  = 1e-6
-        u  = cp.sum(X, axis=1) + ε
+        epislon  = 1e-6
+        u  = cp.sum(X, axis=1) + epislon
         B  = np.array([c.budget for c in campaigns], dtype=float)
 
         constraints = [cp.sum(X, axis=0) <= supplies]
