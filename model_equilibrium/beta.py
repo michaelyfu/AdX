@@ -7,12 +7,12 @@ from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaign
 from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, MarketSegment
 
-class Long(NDaysNCampaignsAgent):
+class BetaAgent(NDaysNCampaignsAgent):
 
-    def __init__(self, name: str = "Long", long_factor=0.6):
+    def __init__(self, name: str = "Beta", beta=0.4):
         super().__init__()
         self.name = name
-        self.long_factor = long_factor
+        self.beta = beta
 
         self.market_segment_map: Dict[str, int] = {
             "MALE_YOUNG_LOWINCOME":   1836,
@@ -122,53 +122,63 @@ class Long(NDaysNCampaignsAgent):
             if set(target_segment).issubset(atomic_attrs):
                 total += count
         return total
-
-    # ───────────────── daily campaign bids ────────────────────────── 
+    
+    # ───────────────── daily campaign bids ──────────────────────────
     def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
-        campaign_bids = {}
-        current_day = self.get_current_day()
-        quality_score = self.get_quality_score()
+            
+            campaign_bids = {}
+            current_day = self.get_current_day()
+            quality_score = self.get_quality_score()
 
-        # Step 1: Build the set of segments we're already targeting
-        active_campaigns = self.get_active_campaigns()
-        committed_segments = set()
-        for camp in active_campaigns:
-            committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
+            # Step 1: Build the set of segments we're already targeting
+            active_campaigns = self.get_active_campaigns()
+            committed_segments = set()
+            for camp in active_campaigns:
+                committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
 
-        # Step 2: Decide bids
-        for campaign in campaigns_for_auction:
-            R = campaign.reach
-            start_day, end_day = campaign.start_day, campaign.end_day
-            duration = end_day - start_day + 1
+            # Step 2: Decide bids
+            for campaign in campaigns_for_auction:
+                R = campaign.reach
+                start_day, end_day = campaign.start_day, campaign.end_day
+                duration = end_day - start_day + 1
 
-            # Step 3: Skip campaigns with overlap
-            overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
-                        for seg in committed_segments)
-            if overlap:
-                continue  # too much overlap with currently active segments
+                # Step 3: Skip campaigns with overlap
+                overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
+                            for seg in committed_segments)
+                if overlap:
+                    continue  # too much overlap with currently active segments
 
-            # Step 4: Estimate user supply and value
-            # **normalize**: get per‑day users, then total expected over the campaign window
-            daily_users    = self.estimate_segment_size(campaign.target_segment)
-            expected_users = daily_users * duration
-            expected_value = min(R, expected_users)
+                # Step 4: Estimate user supply and value
+                # **normalize**: get per‑day users, then total expected over the campaign window
+                daily_users    = self.estimate_segment_size(campaign.target_segment)
+                expected_users = daily_users * duration
+                expected_value = min(R, expected_users)
 
-            # Step 5: Determine bid based on quality and urgency
-            is_short = duration <= 2
-            base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (1.0 if is_short else self.long_factor)
-            clipped_bid = self.clip_campaign_bid(campaign, raw_bid)
+                is_short = (duration <= 2)
+                base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
+                raw_bid  = base_bid \
+                        * (0.9 if current_day >= start_day else 1.0) \
+                        * (0.9 if is_short else 1.0)
 
-            if self.is_valid_campaign_bid(campaign, clipped_bid):
-                campaign_bids[campaign] = clipped_bid
-        return campaign_bids
+                # 5) DYNAMIC PACING BOOST
+                # remaining_reach = R (we haven't won any for this new campaign yet)
+                
+                remaining_days = max(1, duration - (current_day - start_day + 1))
+                pace = min(1.0, R / (remaining_days * max(1, daily_users)))
+                pacing_mult = 1.0 + self.beta * (1.0 - pace)
+                raw_bid *= pacing_mult
+
+                # 6) clip & validate
+                clipped = self.clip_campaign_bid(campaign, raw_bid)
+                if self.is_valid_campaign_bid(campaign, clipped):
+                    campaign_bids[campaign] = clipped
+
+            return campaign_bids
 
     # optional: clear per‑game state
     def on_new_game(self):
         pass
 
 if __name__ == "__main__":
-    bots = [Long()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
+    bots = [BetaAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
     AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
-
-my_agent_submission = Long()

@@ -107,7 +107,7 @@ def dual_lp(allocation, valuations, agents, goods):
 
 def create_sample_campaigns(num_agents):
     campaigns = []
-    segment = list(CONFIG['market_segment_dist'])[0]  # Get the first market segment from CONFIG
+    segment = list(CONFIG['market_segment_dist'])[0]  
     
     for i in range(num_agents):
         # Create a campaign for each agent
@@ -122,7 +122,6 @@ def create_sample_campaigns(num_agents):
             end_day=min(CONFIG['campaign_length_dist']) - 1  # Use minimum campaign length from CONFIG
         )
         # Set the budget
-        # campaign.budget = 100 + i * 20  # Increasing budgets
         campaign.budget = 100
         campaigns.append(campaign)
     

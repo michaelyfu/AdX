@@ -3,92 +3,8 @@ from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaign
 from agt_server.local_games.adx_arena import AdXGameSimulator 
 from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, MarketSegment
 from typing import Set, Dict
-
-'''
-SIMPLIFIED VERSION:
-'''
-CONFIG = {
-        'num_agents': 10,
-        'num_days': 10,
-        'quality_score_alpha': 0.5,
-        'campaigns_per_day': 5,
-        'campaign_reach_dist': [0.3,0.5,0.7],
-        'campaign_length_dist': [1, 2, 3],
-        'market_segment_dist': [
-            MarketSegment(("Male", "Young")),
-        ],
-        'market_segment_pop': {
-            MarketSegment(("Male", "Young")): 2353,
-                },
-        'user_segment_pmf': {
-            MarketSegment(("Male", "Young", "LowIncome")): 1,
-                }
-    }
-
-class MSegment():
-
-    def __init__(self, market_str):
-
-        parsed_market_str = self.parse(market_str.upper())
-
-        gender = parsed_market_str // 9
-        income = (parsed_market_str % 9) // 3
-        age = parsed_market_str % 3
-
-        self.ms_int = parsed_market_str
-        self.is_male = (gender == 0) or (gender == 2)
-        self.is_female = (gender == 1) or (gender == 2)
-        self.is_low_income = (income == 0) or (income == 2)
-        self.is_high_income = (income == 1) or (income == 2)
-        self.is_young = (age == 0) or (age == 2)
-        self.is_old = (age == 0) or (age == 2)
-        
-
-    def parse(self, market_str):
-        base3_map = {
-            "MALE_YOUNG_LOWINCOME":    0,   # [gender=0, income=0, age=0] → 0*9 + 0*3 + 0
-            "MALE_YOUNG_HIGHINCOME":   3,   # [0,1,0] → 0*9 + 1*3 + 0
-            "FEMALE_YOUNG_LOWINCOME":  9,   # [1,0,0] → 1*9 + 0*3 + 0
-            "FEMALE_YOUNG_HIGHINCOME":12,   # [1,1,0] → 1*9 + 1*3 + 0
-
-            "MALE_OLD_LOWINCOME":      1,   # [0,0,1] → 0*9 + 0*3 + 1
-            "MALE_OLD_HIGHINCOME":     4,   # [0,1,1] → 0*9 + 1*3 + 1
-            "FEMALE_OLD_LOWINCOME":   10,   # [1,0,1] → 1*9 + 0*3 + 1
-            "FEMALE_OLD_HIGHINCOME":  13,   # [1,1,1] → 1*9 + 1*3 + 1
-
-            "FEMALE_LOWINCOME":       11,   # [1,0,2] → 1*9 + 0*3 + 2
-            "FEMALE_HIGHINCOME":      14,   # [1,1,2] → 1*9 + 1*3 + 2
-            "YOUNG_LOWINCOME":        18,   # [2,0,0] → 2*9 + 0*3 + 0
-            "YOUNG_HIGHINCOME":       21,   # [2,1,0] → 2*9 + 1*3 + 0
-            "OLD_LOWINCOME":          19,   # [2,0,1] → 2*9 + 0*3 + 1
-            "OLD_HIGHINCOME":         22,   # [2,1,1] → 2*9 + 1*3 + 1
-
-            "MALE_YOUNG":               6,   # [0,2,0] → 0*9 + 2*3 + 0
-            "MALE_OLD":                 7,   # [0,2,1] → 0*9 + 2*3 + 1
-            "FEMALE_YOUNG":            15,   # [1,2,0] → 1*9 + 2*3 + 0
-            "FEMALE_OLD":              16,   # [1,2,1] → 1*9 + 2*3 + 1
-
-            "MALE_LOWINCOME":          2,   # [0,0,2] → 0*9 + 0*3 + 2
-            "MALE_HIGHINCOME":         5,   # [0,1,2] → 0*9 + 1*3 + 2
-        }
-
-        if market_str not in base3_map:
-            print(market_str)
-            raise Exception("market_str not valid")
-        
-        return base3_map[market_str]
-    
-    def get_map(self):
-        binary_indicators = {
-            "male": self.is_male,
-            "female": self.is_female,
-            "low_income": self.is_low_income,
-            "high_income": self.is_high_income,
-            "young": self.is_young,
-            "old": self.is_old
-        }
-        return binary_indicators
-
+import numpy as np
+from utils import MSegment
 
 class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
 
@@ -135,11 +51,6 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
         # TODO: fill this in
         bundles = set()
 
-    #     class BidBundle:
-    # campaign_id: int 
-    # limit: float 
-    # bid_entries: Set[Bid]
-
         active_campaigns = self.get_active_campaigns()
 
         for campaign in active_campaigns:
@@ -171,7 +82,7 @@ class MyNDaysNCampaignsAgent(NDaysNCampaignsAgent):
             # print(item_bid)
 
 
-            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = 0.9, bid_limit = budget)
+            bid:Bid = Bid(bidder = self, auction_item = campaign.target_segment, bid_per_item = item_bid, bid_limit = budget)
 
             bid_set = set()
             bid_set.add(bid)
@@ -260,7 +171,7 @@ if __name__ == "__main__":
     test_agents = [MyNDaysNCampaignsAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Agent {i + 1}") for i in range(9)]
 
     # Don't change this. Adapt initialization to your environment
-    simulator = AdXGameSimulator(config=CONFIG)
+    simulator = AdXGameSimulator()
     simulator.run_simulation(agents=test_agents, num_simulations=500)
 
 my_agent_submission = MyNDaysNCampaignsAgent()

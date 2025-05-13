@@ -7,12 +7,11 @@ from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaign
 from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, MarketSegment
 
-class Long(NDaysNCampaignsAgent):
+class B99(NDaysNCampaignsAgent):
 
-    def __init__(self, name: str = "Long", long_factor=0.6):
+    def __init__(self, name: str = "B99"):
         super().__init__()
         self.name = name
-        self.long_factor = long_factor
 
         self.market_segment_map: Dict[str, int] = {
             "MALE_YOUNG_LOWINCOME":   1836,
@@ -156,7 +155,7 @@ class Long(NDaysNCampaignsAgent):
             # Step 5: Determine bid based on quality and urgency
             is_short = duration <= 2
             base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (1.0 if is_short else self.long_factor)
+            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (0.9 if is_short else 1.0)
             clipped_bid = self.clip_campaign_bid(campaign, raw_bid)
 
             if self.is_valid_campaign_bid(campaign, clipped_bid):
@@ -168,7 +167,5 @@ class Long(NDaysNCampaignsAgent):
         pass
 
 if __name__ == "__main__":
-    bots = [Long()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
+    bots = [B99()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
     AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
-
-my_agent_submission = Long()

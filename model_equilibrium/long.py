@@ -170,5 +170,3 @@ class Long(NDaysNCampaignsAgent):
 if __name__ == "__main__":
     bots = [Long()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
     AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
-
-my_agent_submission = Long()

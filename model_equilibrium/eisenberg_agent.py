@@ -7,12 +7,11 @@ from agt_server.agents.test_agents.adx.tier1.my_agent import Tier1NDaysNCampaign
 from agt_server.local_games.adx_arena import AdXGameSimulator
 from agt_server.agents.utils.adx.structures import Bid, Campaign, BidBundle, MarketSegment
 
-class Long(NDaysNCampaignsAgent):
+class EisenbergAgent(NDaysNCampaignsAgent):
 
-    def __init__(self, name: str = "Long", long_factor=0.6):
+    def __init__(self, name: str = "EisenbergAgent"):
         super().__init__()
         self.name = name
-        self.long_factor = long_factor
 
         self.market_segment_map: Dict[str, int] = {
             "MALE_YOUNG_LOWINCOME":   1836,
@@ -109,66 +108,17 @@ class Long(NDaysNCampaignsAgent):
         
         return bundles
 
-    def estimate_segment_size(self, target_segment: MarketSegment) -> int:
-        """
-        Return the *daily* number of users matching target_segment,
-        by summing over all atomic (3‑attribute) segments whose attributes
-        contain target_segment (i.e. atomic ⊇ target).
-        """
-        total = 0
-        for seg_str, count in self.atomic_segment_map.items():
-            atomic_attrs = set(seg_str.split("_"))  # e.g. {"FEMALE","OLD","LOWINCOME"}
-            # if every attr in target_segment is in this atomic_attrs
-            if set(target_segment).issubset(atomic_attrs):
-                total += count
-        return total
-
     # ───────────────── daily campaign bids ────────────────────────── 
-    def get_campaign_bids(self, campaigns_for_auction: Set[Campaign]) -> Dict[Campaign, float]:
-        campaign_bids = {}
-        current_day = self.get_current_day()
-        quality_score = self.get_quality_score()
-
-        # Step 1: Build the set of segments we're already targeting
-        active_campaigns = self.get_active_campaigns()
-        committed_segments = set()
-        for camp in active_campaigns:
-            committed_segments.add(frozenset(camp.target_segment))  # store as sets for subset checks
-
-        # Step 2: Decide bids
-        for campaign in campaigns_for_auction:
-            R = campaign.reach
-            start_day, end_day = campaign.start_day, campaign.end_day
-            duration = end_day - start_day + 1
-
-            # Step 3: Skip campaigns with overlap
-            overlap = any(frozenset(campaign.target_segment).issubset(seg) or seg.issubset(campaign.target_segment)
-                        for seg in committed_segments)
-            if overlap:
-                continue  # too much overlap with currently active segments
-
-            # Step 4: Estimate user supply and value
-            # **normalize**: get per‑day users, then total expected over the campaign window
-            daily_users    = self.estimate_segment_size(campaign.target_segment)
-            expected_users = daily_users * duration
-            expected_value = min(R, expected_users)
-
-            # Step 5: Determine bid based on quality and urgency
-            is_short = duration <= 2
-            base_bid = 0.25 * R if quality_score < 0.9 else 0.5 * R
-            raw_bid = base_bid * (0.9 if current_day >= start_day else 1.0) * (1.0 if is_short else self.long_factor)
-            clipped_bid = self.clip_campaign_bid(campaign, raw_bid)
-
-            if self.is_valid_campaign_bid(campaign, clipped_bid):
-                campaign_bids[campaign] = clipped_bid
-        return campaign_bids
+    def get_campaign_bids(self, auctions: Set[Campaign]) -> Dict[Campaign, float]:
+        bids = {}
+        for c in auctions:
+            bids[c] = max(0.1 * c.reach, 0.9 * c.reach)
+        return bids
 
     # optional: clear per‑game state
     def on_new_game(self):
         pass
 
 if __name__ == "__main__":
-    bots = [Long()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
+    bots = [EisenbergAgent()] + [Tier1NDaysNCampaignsAgent(name=f"Tier1 {i}") for i in range(9)]
     AdXGameSimulator().run_simulation(agents=bots, num_simulations=100)
-
-my_agent_submission = Long()
